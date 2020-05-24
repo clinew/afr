@@ -1,0 +1,189 @@
+#!/bin/bash
+
+# Utility to interact with the AFR PKI.
+#
+# Copyright (C) 2020  Wade T. Cline
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 3 as
+# published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+# Initialize an AFR infrastructure.  This includes the root, service, and
+# signing certificate.
+afr_init() {
+	# Validate configuration.
+	[ -z "${dir}" ] && die "'dir' not defined"
+	[ -z "${ca}" ] && die "'ca' not defined"
+	[ -z "${service}" ] && die "'service' not defined"
+	[ -z "${subject_alt_name}" ] && die "'subject_alt_name' not defined"
+	openssl_cnf=${openssl_cnf:-/etc/afr/openssl.cnf}
+	[ ! -f "${openssl_cnf}" ] && die "'${openssl_cnf}' not a file"
+
+	# Create root CA.
+	set -ex
+	mkdir -p "${dir}"
+	pushd "${dir}"
+	ca_gen "root"
+	ca_selfsign "root" "${ca} Root CA"
+	ca_crl_gen "root"
+
+	# Create service CA.
+	ca_gen "service"
+	ca_req_gen "service" "${service}"
+	ca_req_submit "root" "service"
+	ca_req_sign "root" "service" "v3_service" "${subject_alt_name}"
+	ca_req_receive "root" "service"
+
+	# Create signing CA.
+	ca_gen "signing"
+	ca_req_gen "signing" "${ca} Signing CA"
+	ca_req_submit "root" "signing"
+	ca_req_sign "root" "signing" "v3_signing"
+	ca_req_receive "root" "signing"
+	ca_crl_gen "signing"
+}
+
+# Generate a CRL for the specified CA.
+# 1: Directory name of the CA whose CRL will be generated.
+ca_crl_gen() {
+	pushd "$1"
+	openssl ca -gencrl -config openssl.cnf -cert "certs/${1}.pem" -keyfile "private/${1}.pem" -out "crl/${1}.pem"
+	popd
+}
+
+# Create a CA at the specified location.
+# 1: Directory name for the CA.
+ca_gen() {
+	mkdir -p "$1"
+	pushd "$1"
+	cp "${openssl_cnf}" ./
+	mkdir certs csr crl newcerts private
+	touch index.txt
+	echo 1000 > serial
+	echo 1000 > crlnumber
+	umask 0077
+	openssl genrsa -out "private/$1.pem" 4096
+	umask 0022
+	popd
+}
+
+# Function to generate a CSR.
+# 1: Directory name of the CA which will generate the CSR.
+# 2: Common Name of the CA to request
+ca_req_gen() {
+	pushd "$1"
+	openssl req -new -key "private/$1.pem" -out "csr/$1.pem" -subj "/CN=$2/"
+	popd
+}
+
+# Function to retrieve a signed certificate from the signing CA back to the
+# requesting CA.  This is currently a glorified wrapper for a copy function.
+# $1 The CA which did the signing.
+# $2 The CA which was signed.
+ca_req_receive() {
+	cp "$1/certs/$2.pem" "$2/certs/$2.pem"
+}
+
+# Function to sign a CSR from a CA.
+# Signing a certificate and then immediately using it has been known to cause
+# 'Not activated, or expired certificate' errors, so sign it 3 seconds in the
+# past.
+# 1: The CA which will sign.
+# 2: The CA which will be signed.
+# 3: Extensions section to use.
+# 4 (optional): subjectAltName value.
+ca_req_sign() {
+	# Create additional extension.
+	pushd "$1"
+	if [ -n "$4" ]; then
+		# Giant, fragile hack (see file).
+		sed -i "s/FIXME_SAN/$4/" openssl.cnf
+	fi
+
+	# Sign the certificate.
+	openssl ca -config openssl.cnf -keyfile "private/${1}.pem" -cert "certs/${1}.pem" -extensions "$3" -in "csr/${2}.pem" -out "certs/${2}.pem" -batch -startdate $(TZ=UTC date +%Y%m%d%H%M%SZ --date "now - 3 seconds")
+	popd
+}
+
+# Function to submit one CA's CSR to another CA for signing.  This is currently
+# a glorified wrapper for a copy function.
+# $1 The CA which will sign.
+# $2 The CA which will be signed.
+ca_req_submit() {
+	cp "$2/csr/$2.pem" "$1/csr/$2.pem"
+}
+
+# Function to self-sign a CA.
+# 1: Directory name of the CA to self-sign.
+# 2: Common Name of the CA to self-sign.
+ca_selfsign() {
+	pushd "$1"
+	openssl req -key "private/$1.pem" -days 36500 -new -x509 -out "certs/$1.pem" -subj "/CN=$2/"
+	popd
+}
+
+# Print a message and exit the program with failure status.
+# 1: The message to print
+die() {
+	echo "${1}"
+	exit 1
+}
+
+# Print a usage message and exit the program.  Exits failure if an error
+# message is present.
+# 1 (optional): Error message to print.
+usage_print() {
+	# Print error message.
+	if [ $# -gt 0 ]; then
+		echo "$1"
+		echo ""
+	fi
+
+	# Print usage message.
+	echo "$0 [-c <path>] {init}"
+	echo ""
+	echo -e "\t-c  Path to alternate configuration file"
+	echo -e "\tinit: Initialize an AFR root CA"
+
+	# Quit.
+	if [ $# -gt 0 ]; then
+		exit 1
+	fi
+	exit 0
+}
+
+# Parse optional arguments.
+config="/etc/afr/afr.conf"
+while getopts "c:" opt; do
+	case "$opt" in
+	c)
+		config="${OPTARG}"
+		shift
+		;;
+	*)
+		usage_print "Unknown argument: $opt"
+		;;
+	esac
+	shift
+done
+
+# Parse configuration file.
+[ -f "${config}" ] || die "Config file '${config}' not found"
+source "${config}"
+
+# Run command.
+if [ $# -eq 0 ]; then
+	usage_print "Not enough arguments"
+elif [ "$1" == "init" ]; then
+	afr_init
+else
+	usage_print "Unknown command: $1"
+fi
