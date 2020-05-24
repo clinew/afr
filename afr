@@ -24,6 +24,9 @@ afr_init() {
 	[ -z "${ca}" ] && die "'ca' not defined"
 	[ -z "${service}" ] && die "'service' not defined"
 	[ -z "${subject_alt_name}" ] && die "'subject_alt_name' not defined"
+	dirname_root=${dirname_root:-root}
+	dirname_service=${dirname_service:-service}
+	dirname_signing=${dirname_signing:-signing}
 	openssl_cnf=${openssl_cnf:-/etc/afr/openssl.cnf}
 	[ ! -f "${openssl_cnf}" ] && die "'${openssl_cnf}' not a file"
 
@@ -31,24 +34,24 @@ afr_init() {
 	set -ex
 	mkdir -p "${dir}"
 	pushd "${dir}"
-	ca_gen "root"
-	ca_selfsign "root" "${ca} Root CA"
-	ca_crl_gen "root"
+	ca_gen "${dirname_root}"
+	ca_selfsign "${dirname_root}" "${ca} Root CA"
+	ca_crl_gen "${dirname_root}"
 
 	# Create service CA.
-	ca_gen "service"
-	ca_req_gen "service" "${service}"
-	ca_req_submit "root" "service"
-	ca_req_sign "root" "service" "v3_service" "${subject_alt_name}"
-	ca_req_receive "root" "service"
+	ca_gen "${dirname_service}"
+	ca_req_gen "${dirname_service}" "${service}"
+	ca_req_submit "${dirname_root}" "${dirname_service}"
+	ca_req_sign "${dirname_root}" "${dirname_service}" "v3_service" "${subject_alt_name}"
+	ca_req_receive "${dirname_root}" "${dirname_service}"
 
 	# Create signing CA.
-	ca_gen "signing"
-	ca_req_gen "signing" "${ca} Signing CA"
-	ca_req_submit "root" "signing"
-	ca_req_sign "root" "signing" "v3_signing"
-	ca_req_receive "root" "signing"
-	ca_crl_gen "signing"
+	ca_gen "${dirname_signing}"
+	ca_req_gen "${dirname_signing}" "${ca} Signing CA"
+	ca_req_submit "${dirname_root}" "${dirname_signing}"
+	ca_req_sign "${dirname_root}" "${dirname_signing}" "v3_signing"
+	ca_req_receive "${dirname_root}" "${dirname_signing}"
+	ca_crl_gen "${dirname_signing}"
 }
 
 # Generate a CRL for the specified CA.
