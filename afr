@@ -16,6 +16,51 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+# Generate the server's CA file.
+afr_gen_cafile() {
+	# Validate configuration.
+	[ -z "${dir}" ] && die "'dir' not defined"
+
+	# Generate CA file.
+	pushd "${dir}"
+	local path_root="${dir}/${dirname_root}/certs/${dirname_root}.pem"
+	[ -f "${path_root}" ] || die "Root cert not found ('${path_root}' not a file)"
+	local path_signing="${dir}/${dirname_signing}/certs/${dirname_signing}.pem"
+	[ -f "${path_signing}" ] || die "Signing cert not found ('${path_signing}' not a file)"
+	cat "${path_root}" "${path_signing}" $(find "${dir}/${dirname_signing}/certs/" -name "*.ref.pem") > "${cafile}"
+	popd
+}
+
+# Generate the server's certificate file.
+afr_gen_certsfile() {
+	# Validate configuration.
+	[ -z "${dir}" ] && die "'dir' not defined"
+
+	# Generate certs file.
+	pushd "${dir}"
+	local path_root="${dir}/${dirname_root}/certs/${dirname_root}.pem"
+	[ -f "${path_root}" ] || die "Root cert not found ('${path_root}' not a file)"
+	local path_service="${dir}/${dirname_service}/certs/${dirname_service}.pem"
+	[ -f "${path_service}" ] || die "Service cert not found ('${path_service}' not a file)"
+	cat "${path_service}" "${path_root}" > "${certsfile}"
+	popd
+}
+
+# Generate the server's CRL file.
+afr_gen_crlfile() {
+	# Validate configuration.
+	[ -z "${dir}" ] && die "'dir' not defined"
+
+	# Generate CRL file.
+	pushd "${dir}"
+	local path_root="${dir}/${dirname_root}/crl/${dirname_root}.pem"
+	[ -f "${path_root}" ] || die "Root CRL not found ('${path_root}' not a file)"
+	local path_signing="${dir}/${dirname_signing}/crl/${dirname_signing}.pem"
+	[ -f "${path_signing}" ] || die "Signing CRL not found ('${path_signing}' not a file)"
+	cat "${path_root}" "${path_signing}" $(find "${dir}/${dirname_signing}/crl/" -name "*.ref.pem") > "${crlfile}"
+	popd
+}
+
 # Initialize an AFR infrastructure.  This includes the root, service, and
 # signing certificate.
 afr_init() {
@@ -48,6 +93,11 @@ afr_init() {
 	ca_req_sign "${dirname_root}" "${dirname_signing}" "v3_signing"
 	ca_req_receive "${dirname_root}" "${dirname_signing}"
 	ca_crl_gen "${dirname_signing}"
+
+	# Generate files.
+	afr_gen_cafile
+	afr_gen_certsfile
+	afr_gen_crlfile
 }
 
 # Copies the specified CRL and stores it under the specified friend.
@@ -79,6 +129,9 @@ afr_revoke_friend() {
 	cert="${dir}/${dirname_signing}/certs/$1.pem"
 	[ -f "${cert}" ] || die "Friend '$1' does not exist ('${cert}' not a file)"
 	ca_revoke "${dirname_signing}" "$1"
+
+	# Re-generate the CRL file.
+	afr_gen_crlfile
 }
 
 # Sign the specified CSR as a friend's client certificate and record the CSR
@@ -121,6 +174,9 @@ afr_sign_referrer() {
 
 	# Sign the CSR.
 	ca_req_sign "${dirname_signing}" "${2}.ref" "v3_referrer"
+
+	# Generate CAfile.
+	afr_gen_cafile
 }
 
 # Generate a CRL for the specified CA.
@@ -277,6 +333,9 @@ dirname_root=${dirname_root:-root}
 dirname_service=${dirname_service:-service}
 dirname_signing=${dirname_signing:-signing}
 openssl_cnf=${openssl_cnf:-/etc/afr/openssl.cnf}
+cafile=${cafile:-ca.pem}
+certsfile=${certsfile:-certs.pem}
+crlfile=${crlfile:-crl.pem}
 
 # Run command.
 if [ $# -eq 0 ]; then
