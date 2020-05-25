@@ -50,6 +50,24 @@ afr_init() {
 	ca_crl_gen "${dirname_signing}"
 }
 
+# Copies the specified CRL and stores it under the specified friend.
+# 1: Path to friend's CRL file
+# 2: Name of friend to store the CRL file under.
+afr_receive_crl() {
+	# Validate configuration.
+	[ -z "${dir}" ] && die "'dir' not defined"
+	[ -d "${dir}/${dirname_signing}" ] || die "Signing CA '${dirname_signing}' not found"
+
+	# Store the CRL.
+	[ -f "$1" ] || die "CRL '$1' not found"
+	path="${dir}/${dirname_signing}/certs/$2.ref.pem"
+	[ -f "${path}" ] || die "'$2' does not appear to be a referrer ('${path}' not found)"
+	cp "$1" "${dir}/${dirname_signing}/crl/$2.ref.pem"
+
+	# Re-generate CRL file.
+	afr_gen_crlfile
+}
+
 # Revoke the specified friend's client certificate.
 # 1: Name of the friend to revoke.
 afr_revoke_friend() {
@@ -213,11 +231,14 @@ usage_print() {
 	fi
 
 	# Print usage message.
-	echo "$0 [-c <path>] {init|revoke-friend|sign-friend|sign-referrer}"
+	echo "$0 [-c <path>] {init|receive-crl|revoke-friend|sign-friend|sign-referrer}"
 	echo ""
 	echo -e "\t-c  Path to alternate configuration file"
 	echo ""
 	echo -e "\tinit: Initialize an AFR root CA"
+	echo -e "\treceive-crl <CRL> <NAME>: Receive a friend's CRL"
+	echo -e "\t\tCRL: Path to friend's CRL"
+	echo -e "\t\tNAME: Name of friend who issued the CRL"
 	echo -e "\trevoke-friend <NAME>: Revoke friend's certificate"
 	echo -e "\t\tNAME: Name of friend to revoke"
 	echo -e "\tsign-friend <CSR> <NAME>: Issue friend client certificate"
@@ -262,6 +283,12 @@ if [ $# -eq 0 ]; then
 	usage_print "Not enough arguments"
 elif [ "$1" == "init" ]; then
 	afr_init
+elif [ "$1" == "receive-crl" ]; then
+	shift
+	if [ $# -lt 2 ]; then
+		usage_print "Not enough arguments"
+	fi
+	afr_receive_crl $@
 elif [ "$1" == "revoke-friend" ]; then
 	shift
 	if [ $# -lt 1 ]; then
