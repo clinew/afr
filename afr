@@ -50,6 +50,19 @@ afr_init() {
 	ca_crl_gen "${dirname_signing}"
 }
 
+# Revoke the specified friend's client certificate.
+# 1: Name of the friend to revoke.
+afr_revoke_friend() {
+	# Validate configuration.
+	[ -z "${dir}" ] && die "'dir' not defined"
+	[ -d "${dir}/${dirname_signing}" ] || die "Signing CA '${dirname_signing}' not found"
+
+	# Revoke the certificate.
+	cert="${dir}/${dirname_signing}/certs/$1.pem"
+	[ -f "${cert}" ] || die "Friend '$1' does not exist ('${cert}' not a file)"
+	ca_revoke "${dirname_signing}" "$1"
+}
+
 # Sign the specified CSR as a friend's client certificate and record the CSR
 # and certificate as the specified name.
 # 1: Friend's CSR to sign.
@@ -139,6 +152,17 @@ ca_req_submit() {
 	cp "$2/csr/$2.pem" "$1/csr/$2.pem"
 }
 
+# Use the specified CA in order to revoke the specified certificate.  This
+# will update the CRL for the specified CA.
+# 1: Directory of the CA which will be issuing the revocation.
+# 2: Name of the certificate which will be revoked.
+ca_revoke() {
+	pushd "$1"
+	openssl ca -config openssl.cnf -keyfile "private/${1}.pem" -cert "certs/${1}.pem" -revoke "certs/${2}.pem"
+	popd
+	ca_crl_gen "${1}"
+}
+
 # Function to self-sign a CA.
 # 1: Directory name of the CA to self-sign.
 # 2: Common Name of the CA to self-sign.
@@ -166,11 +190,13 @@ usage_print() {
 	fi
 
 	# Print usage message.
-	echo "$0 [-c <path>] {init|sign-friend}"
+	echo "$0 [-c <path>] {init|revoke-friend|sign-friend}"
 	echo ""
 	echo -e "\t-c  Path to alternate configuration file"
 	echo ""
 	echo -e "\tinit: Initialize an AFR root CA"
+	echo -e "\trevoke-friend: NAME"
+	echo -e "\t\tNAME: Name of friend to revoke"
 	echo -e "\tsign-friend: CSR NAME"
 	echo -e "\t\tCSR: Path to friend's CSR"
 	echo -e "\t\tNAME: Name of friend to sign"
@@ -210,6 +236,12 @@ if [ $# -eq 0 ]; then
 	usage_print "Not enough arguments"
 elif [ "$1" == "init" ]; then
 	afr_init
+elif [ "$1" == "revoke-friend" ]; then
+	shift
+	if [ $# -lt 1 ]; then
+		usage_print "Not enough arguments"
+	fi
+	afr_revoke_friend $@
 elif [ "$1" == "sign-friend" ]; then
 	shift
 	if [ $# -lt 2 ]; then
