@@ -82,6 +82,29 @@ afr_sign_friend() {
 	ca_req_sign "${dirname_signing}" "${2}" "v3_client"
 }
 
+# Sign the specified CSR for the specified friend as a referrer certificate.
+# TODO: Look into validation of incoming CSR.  Pretty sure its specified
+# extensions are ignored and overridden, but it'd be good to verify.
+# 1: Friend's CSR to sign.
+# 2: Name of the friend to sign.
+afr_sign_referrer() {
+	# Validate configuration.
+	[ -z "${dir}" ] && die "'dir not defined"
+	[ -d "${dir}/${dirname_signing}" ] || die "Signing CA '${dirname_signing}' not found"
+
+	# Place the CSR with the signing CA.
+	[ -f "$1" ] || die "CSR '$1' not a file"
+	ca_path="${dir}/${dirname_signing}"
+	path="${ca_path}/certs/$2.pem"
+	[ -f "${path}" ] || die "Friend '$2' does not appear to exist ('${path}' not a file)"
+	path="${ca_path}/csr/$2.ref.pem"
+	[ -f "${path}" ] && die "Friend '$2' already a referrer ('${path}' exists)"
+	cp "$1" "${path}"
+
+	# Sign the CSR.
+	ca_req_sign "${dirname_signing}" "${2}.ref" "v3_referrer"
+}
+
 # Generate a CRL for the specified CA.
 # 1: Directory name of the CA whose CRL will be generated.
 ca_crl_gen() {
@@ -190,14 +213,17 @@ usage_print() {
 	fi
 
 	# Print usage message.
-	echo "$0 [-c <path>] {init|revoke-friend|sign-friend}"
+	echo "$0 [-c <path>] {init|revoke-friend|sign-friend|sign-referrer}"
 	echo ""
 	echo -e "\t-c  Path to alternate configuration file"
 	echo ""
 	echo -e "\tinit: Initialize an AFR root CA"
-	echo -e "\trevoke-friend: NAME"
+	echo -e "\trevoke-friend <NAME>: Revoke friend's certificate"
 	echo -e "\t\tNAME: Name of friend to revoke"
-	echo -e "\tsign-friend: CSR NAME"
+	echo -e "\tsign-friend <CSR> <NAME>: Issue friend client certificate"
+	echo -e "\t\tCSR: Path to friend's CSR"
+	echo -e "\t\tNAME: Name of friend to sign"
+	echo -e "\tsign-referrer <CSR> <NAME>: Issue friend signing certificate"
 	echo -e "\t\tCSR: Path to friend's CSR"
 	echo -e "\t\tNAME: Name of friend to sign"
 
@@ -248,6 +274,12 @@ elif [ "$1" == "sign-friend" ]; then
 		usage_print "Not enough arguments"
 	fi
 	afr_sign_friend $@
+elif [ "$1" == "sign-referrer" ]; then
+	shift
+	if [ $# -lt 2 ]; then
+		usage_print "Not enough arguments"
+	fi
+	afr_sign_referrer $@
 else
 	usage_print "Unknown command: $1"
 fi
