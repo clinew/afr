@@ -24,10 +24,6 @@ afr_init() {
 	[ -z "${ca}" ] && die "'ca' not defined"
 	[ -z "${service}" ] && die "'service' not defined"
 	[ -z "${subject_alt_name}" ] && die "'subject_alt_name' not defined"
-	dirname_root=${dirname_root:-root}
-	dirname_service=${dirname_service:-service}
-	dirname_signing=${dirname_signing:-signing}
-	openssl_cnf=${openssl_cnf:-/etc/afr/openssl.cnf}
 	[ ! -f "${openssl_cnf}" ] && die "'${openssl_cnf}' not a file"
 
 	# Create root CA.
@@ -52,6 +48,25 @@ afr_init() {
 	ca_req_sign "${dirname_root}" "${dirname_signing}" "v3_signing"
 	ca_req_receive "${dirname_root}" "${dirname_signing}"
 	ca_crl_gen "${dirname_signing}"
+}
+
+# Sign the specified CSR as a friend's client certificate and record the CSR
+# and certificate as the specified name.
+# 1: Friend's CSR to sign.
+# 2: Name of the friend to sign.
+afr_sign_friend() {
+	# Validate configuration.
+	[ -z "${dir}" ] && die "'dir' not defined"
+	[ -d "${dir}/${dirname_signing}" ] || die "Signing CA '${dirname_signing}' not found"
+
+	# Place CSR with the signing CA.
+	[ -f "$1" ] || die "CSR '$1' not a file"
+	dest="${dir}/${dirname_signing}/csr/$2.pem"
+	[ -f "${dest}" ] && die "Friend '$2' already exists ('${dest}' already a file)"
+	cp "$1" "${dest}"
+
+	# Sign the CSR.
+	ca_req_sign "${dirname_signing}" "${2}" "v3_client"
 }
 
 # Generate a CRL for the specified CA.
@@ -151,10 +166,14 @@ usage_print() {
 	fi
 
 	# Print usage message.
-	echo "$0 [-c <path>] {init}"
+	echo "$0 [-c <path>] {init|sign-friend}"
 	echo ""
 	echo -e "\t-c  Path to alternate configuration file"
+	echo ""
 	echo -e "\tinit: Initialize an AFR root CA"
+	echo -e "\tsign-friend: CSR NAME"
+	echo -e "\t\tCSR: Path to friend's CSR"
+	echo -e "\t\tNAME: Name of friend to sign"
 
 	# Quit.
 	if [ $# -gt 0 ]; then
@@ -181,12 +200,22 @@ done
 # Parse configuration file.
 [ -f "${config}" ] || die "Config file '${config}' not found"
 source "${config}"
+dirname_root=${dirname_root:-root}
+dirname_service=${dirname_service:-service}
+dirname_signing=${dirname_signing:-signing}
+openssl_cnf=${openssl_cnf:-/etc/afr/openssl.cnf}
 
 # Run command.
 if [ $# -eq 0 ]; then
 	usage_print "Not enough arguments"
 elif [ "$1" == "init" ]; then
 	afr_init
+elif [ "$1" == "sign-friend" ]; then
+	shift
+	if [ $# -lt 2 ]; then
+		usage_print "Not enough arguments"
+	fi
+	afr_sign_friend $@
 else
 	usage_print "Unknown command: $1"
 fi
