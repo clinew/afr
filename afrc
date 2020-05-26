@@ -22,6 +22,9 @@ source afr_lib.sh
 # Initialize the user's AFR client.
 # 1: Name of the user to request access as.
 afrc_init() {
+	# Validate configuration.
+	[ -f "${openssl_cnf}" ] || die "OpenSSL configuration file '${openssl_cnf}' not found"
+
 	# Set-up.
 	mkdir -p "${dir}"
 	pushd "${dir}"
@@ -86,6 +89,21 @@ afrc_request_referrer() {
 	echo "Now send the file '${dir}/csr.ref.pem' to the person who will issue your referrer certificate"
 }
 
+# Revoke the specified referred's client certificate.
+# 1: Name of the referred user to revoke.
+afrc_revoke_referred() {
+	# Revoke the certificate.
+	pushd "${dir}"
+	cert="${account}.ref/certs/$1.pem"
+	[ -f "${cert}" ] || die "Referred user does not exist ('${cert}' not a file)"
+	ca_revoke "${account}.ref" "$1"
+
+	# Update the CRL.
+	ca_crl_gen "${account}.ref"
+	cp "${account}.ref/crl/${account}.ref.pem" "${dir}/crl.pem"
+	echo "Remember to resubmit '${dir}/crl.pem' to the admin in order for the revocation to take effect"
+}
+
 # Sign the specified certificate of a referred user.
 # 1: Path to referred's CSR.
 # 2: Name of the referred user.
@@ -121,7 +139,7 @@ usage_print() {
 	fi
 
 	# Print usage message.
-	echo "$0 {init|receive-client|receive-referrer|request-referrer|sign-referred}"
+	echo "$0 {init|receive-client|receive-referrer|request-referrer|revoke-referred|sign-referred}"
 	echo ""
 	echo -e "\tinit <NAME>: Initialize the client's AFR"
 	echo -e "\t\tNAME: Certificate Common Name (CN) to request"
@@ -130,6 +148,8 @@ usage_print() {
 	echo -e "\treceive-referrer <CERT>: Receive a referrer certificate"
 	echo -e "\t\tCERT: Path to the referrer certificate to receive"
 	echo -e "\trequest-referrer: Generate CSR for a referrer certificate"
+	echo -e "\trevoke-referred <NAME>: Revoke a referred user's certificate"
+	echo -e "\t\tNAME: Name of the referred user to revoke"
 	echo -e "\tsign-referred <CSR> <NAME>: Sign certificate for a referred user"
 	echo -e "\t\tCSR: The referred user's certificate signing request"
 	echo -e "\t\tNAME: Name of the referred user"
@@ -187,6 +207,12 @@ elif [ "$1" == "receive-referrer" ]; then
 	afrc_receive_referrer $@
 elif [ "$1" == "request-referrer" ]; then
 	afrc_request_referrer $@
+elif [ "$1" == "revoke-referred" ]; then
+	shift
+	if [ $# -lt 1 ]; then
+		usage_print "Not enough arguments"
+	fi
+	afrc_revoke_referred $@
 elif [ "$1" == "sign-referred" ]; then
 	shift
 	if [ $# -lt 2 ]; then
