@@ -19,3 +19,7 @@ default:
 
 install:
 	cp afr /usr/local/bin/afr
+	cp afrc /usr/local/bin/afrc
+	cp afr_lib.sh /usr/local/bin/afr_lib.sh
+	mkdir -p /etc/afr
+	cp openssl.cnf /etc/afr/openssl.cnf

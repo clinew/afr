@@ -1,0 +1,94 @@
+#!/bin/bash
+
+# Utility to interact with the AFR PKI as a client ("friend" or "referred").
+#
+# Copyright (C) 2020  Wade T. Cline
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 3 as
+# published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+# Include library.
+source afr_lib.sh
+
+# Initialize the user's AFR client.
+# 1: Name of the user to request access as.
+afrc_init() {
+	# Set-up.
+	mkdir -p "${dir}"
+	pushd "${dir}"
+
+	# Generate user's CA.
+	ca_gen "${account}"
+
+	# Generate user's CSR.
+	ca_req_gen "${account}" "$1"
+
+	# Provide instructions for user.
+	cp "${account}/csr/${account}.pem" "${dir}/csr.pem"
+	echo "Now send the file '${dir}/csr.pem' to the person who will invite you"
+}
+
+# Print a usage message and exit the program.  Exits failure if an error
+# message is present.
+# 1 (optional): Error message to print.
+usage_print() {
+	# Print error message.
+	if [ $# -gt 0 ]; then
+		echo "$1"
+		echo ""
+	fi
+
+	# Print usage message.
+	echo "$0 {init}"
+	echo ""
+	echo -e "\tinit <NAME>: Initialize the client's AFR"
+	echo -e "\t\tCertificate username to request"
+
+	# Quit.
+	if [ $# -gt 0 ]; then
+		exit 1
+	fi
+	exit 0
+}
+
+# Parse optional arguments.
+config="~/.afrc/afrc.conf"
+while getopts "c:" opt; do
+	case "$opt" in
+	c)
+		config="${OPTARG}"
+		[ -f "${config}" ] || die "Config file '${config}' not a file"
+		shift
+		;;
+	*)
+		usage_print "Unknown argument: $opt"
+		;;
+	esac
+	shift
+done
+
+# Parse configuration file.
+[ -f "${config}" ] && source "${config}"
+dir=${dir:-~/.afrc}
+account=${account:-${USER}}
+openssl_cnf=${openssl_cnf:-/etc/afr/openssl.cnf}
+
+# Run command.
+if [ $# -eq 0 ]; then
+	usage_print "Not enough arguments"
+elif [ "$1" == "init" ]; then
+	shift
+	if [ $# -lt 1 ]; then
+		usage_print "Not enough arguments"
+	fi
+	afrc_init $@
+fi
