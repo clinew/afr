@@ -134,6 +134,22 @@ afr_revoke_friend() {
 	afr_gen_crlfile
 }
 
+# Revoke the specified friend's referrer certificate.
+# 1: Name of the friend whose referrer certificate to revoke.
+afr_revoke_referrer() {
+	# Validate configuration.
+	[ -z "${dir}" ] && die "'dir' not defined"
+	[ -d "${dir}/${dirname_signing}" ] || die "Signing CA '${dirname_signing}' not found'"
+
+	# Revoke the certificate.
+	cert="${dir}/${dirname_signing}/certs/$1.ref.pem"
+	[ -f "${cert}" ] || die "Friend '$1' does not appear to be a referrer ('${cert}' not a file)"
+	ca_revoke "${dirname_signing}" "$1.ref"
+
+	# Re-generate the CRL file.
+	afr_gen_crlfile
+}
+
 # Sign the specified CSR as a friend's client certificate and record the CSR
 # and certificate as the specified name.
 # 1: Friend's CSR to sign.
@@ -287,7 +303,7 @@ usage_print() {
 	fi
 
 	# Print usage message.
-	echo "$0 [-c <path>] {init|receive-crl|revoke-friend|sign-friend|sign-referrer}"
+	echo "$0 [-c <path>] {init|receive-crl|revoke-friend|revoke-referrer|sign-friend|sign-referrer}"
 	echo ""
 	echo -e "\t-c  Path to alternate configuration file"
 	echo ""
@@ -295,8 +311,10 @@ usage_print() {
 	echo -e "\treceive-crl <CRL> <NAME>: Receive a friend's CRL"
 	echo -e "\t\tCRL: Path to friend's CRL"
 	echo -e "\t\tNAME: Name of friend who issued the CRL"
-	echo -e "\trevoke-friend <NAME>: Revoke friend's certificate"
+	echo -e "\trevoke-friend <NAME>: Revoke friend's client certificate"
 	echo -e "\t\tNAME: Name of friend to revoke"
+	echo -e "\trevoke-referrer <NAME>: Revoke friend's referrer certificate"
+	echo -e "\t\tNAME: Name of friend's referrer certificate to revoke"
 	echo -e "\tsign-friend <CSR> <NAME>: Issue friend client certificate"
 	echo -e "\t\tCSR: Path to friend's CSR"
 	echo -e "\t\tNAME: Name of friend to sign"
@@ -354,6 +372,12 @@ elif [ "$1" == "revoke-friend" ]; then
 		usage_print "Not enough arguments"
 	fi
 	afr_revoke_friend $@
+elif [ "$1" == "revoke-referrer" ]; then
+	shift
+	if [ $# -lt 1 ]; then
+		usage_print "Not enough arguments"
+	fi
+	afr_revoke_referrer $@
 elif [ "$1" == "sign-friend" ]; then
 	shift
 	if [ $# -lt 2 ]; then
