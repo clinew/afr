@@ -37,6 +37,18 @@ afrc_init() {
 	echo "Now send the file '${dir}/csr.pem' to the person who will invite you"
 }
 
+# Receive the specified client certificate.
+# 1: Path to the certificate to be received.
+afrc_receive_client() {
+	# Receive the certificate.
+	cert=$(readlink -f "$1")
+	[ -f "${cert}" ] || die "Certificate '${cert}' not a file"
+	pushd "${dir}"
+	dest="${account}/certs/${account}.pem"
+	[ -f "${dest}" ] && die "Client certificate already received ('${dest}' is a file)"
+	cp "${cert}" "${dest}"
+}
+
 # Print a usage message and exit the program.  Exits failure if an error
 # message is present.
 # 1 (optional): Error message to print.
@@ -48,10 +60,12 @@ usage_print() {
 	fi
 
 	# Print usage message.
-	echo "$0 {init}"
+	echo "$0 {init|receive-client}"
 	echo ""
 	echo -e "\tinit <NAME>: Initialize the client's AFR"
-	echo -e "\t\tCertificate username to request"
+	echo -e "\t\tNAME: Certificate Common Name (CN) to request"
+	echo -e "\treceive-client <CERT>: Receive a signed client certificate"
+	echo -e "\t\tCERT: Path to the received certificate"
 
 	# Quit.
 	if [ $# -gt 0 ]; then
@@ -91,4 +105,10 @@ elif [ "$1" == "init" ]; then
 		usage_print "Not enough arguments"
 	fi
 	afrc_init $@
+elif [ "$1" == "receive-client" ]; then
+	shift
+	if [ $# -lt 1 ]; then
+		usage_print "Not enough arguments"
+	fi
+	afrc_receive_client $@
 fi
