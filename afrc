@@ -82,8 +82,32 @@ afrc_request_referrer() {
 	ca_req_gen "${account}.ref" "${name} Referrer"
 
 	# Provide instructions for user.
-	cp "${account}/csr/${account}.ref.pem" "${dir}/csr.ref.pem"
+	cp "${account}.ref/csr/${account}.ref.pem" "${dir}/csr.ref.pem"
 	echo "Now send the file '${dir}/csr.ref.pem' to the person who will issue your referrer certificate"
+}
+
+# Sign the specified certificate of a referred user.
+# 1: Path to referred's CSR.
+# 2: Name of the referred user.
+afrc_sign_referred() {
+	# Save CSR.
+	cert=$(readlink -f "$1")
+	[ -f "${cert}" ] || die "Referred CSR '${cert}' not a file"
+	pushd "${dir}"
+	dest="${account}.ref/csr/$2.pem"
+	[ -f "${dest}" ] && die "Referred '$2' already exists ('${dest}' is a file)"
+	cp "${cert}" "${dest}"
+
+	# Sign certificate.
+	ca_req_sign "${account}.ref" "$2" "v3_client"
+
+	# Provide instructions for user.
+	i=0
+	while [ -f "${dir}/cert$i.pem" ]; do
+		i=$(($i+1))
+	done
+	cp "${account}.ref/certs/$2.pem" "${dir}/cert$i.pem"
+	echo "Now send the file '${dir}/cert$i.pem' to the referred user"
 }
 
 # Print a usage message and exit the program.  Exits failure if an error
@@ -97,12 +121,18 @@ usage_print() {
 	fi
 
 	# Print usage message.
-	echo "$0 {init|receive-client}"
+	echo "$0 {init|receive-client|receive-referrer|request-referrer|sign-referred}"
 	echo ""
 	echo -e "\tinit <NAME>: Initialize the client's AFR"
 	echo -e "\t\tNAME: Certificate Common Name (CN) to request"
 	echo -e "\treceive-client <CERT>: Receive a signed client certificate"
-	echo -e "\t\tCERT: Path to the received certificate"
+	echo -e "\t\tCERT: Path to the client certificate to receive"
+	echo -e "\treceive-referrer <CERT>: Receive a referrer certificate"
+	echo -e "\t\tCERT: Path to the referrer certificate to receive"
+	echo -e "\trequest-referrer: Generate CSR for a referrer certificate"
+	echo -e "\tsign-referred <CSR> <NAME>: Sign certificate for a referred user"
+	echo -e "\t\tCSR: The referred user's certificate signing request"
+	echo -e "\t\tNAME: Name of the referred user"
 
 	# Quit.
 	if [ $# -gt 0 ]; then
@@ -112,6 +142,7 @@ usage_print() {
 }
 
 # Parse optional arguments.
+set -ex
 config="~/.afrc/afrc.conf"
 while getopts "c:" opt; do
 	case "$opt" in
@@ -156,4 +187,10 @@ elif [ "$1" == "receive-referrer" ]; then
 	afrc_receive_referrer $@
 elif [ "$1" == "request-referrer" ]; then
 	afrc_request_referrer $@
+elif [ "$1" == "sign-referred" ]; then
+	shift
+	if [ $# -lt 2 ]; then
+		usage_print "Not enough arguments"
+	fi
+	afrc_sign_referred $@
 fi

@@ -75,7 +75,6 @@ afr_init() {
 	[ ! -f "${openssl_cnf}" ] && die "'${openssl_cnf}' not a file"
 
 	# Create root CA.
-	set -ex
 	mkdir -p "${dir}"
 	pushd "${dir}"
 	ca_gen "${dirname_root}"
@@ -236,6 +235,7 @@ usage_print() {
 }
 
 # Parse optional arguments.
+set -ex
 config="/etc/afr/afr.conf"
 while getopts "c:" opt; do
 	case "$opt" in
