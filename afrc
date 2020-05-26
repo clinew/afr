@@ -37,6 +37,23 @@ afrc_init() {
 	echo "Now send the file '${dir}/csr.pem' to the person who will invite you"
 }
 
+# Receive the specified referrer certificate.
+# 1: Path the to referrer certificate to be received.
+afrc_receive_referrer() {
+	# Install the certificate.
+	cert=$(readlink -f "$1")
+	[ -f "${cert}" ] || die "Referrer certificate '${cert}' not a file"
+	pushd "${dir}"
+	dest="${account}.ref/certs/${account}.ref.pem"
+	[ -f "${dest}" ] && die "Referrer certificate already instaleld ('${dest}' is a file)"
+	cp "${cert}" "${dest}"
+
+	# Generate the CRL.
+	ca_crl_gen "${account}.ref"
+	cp "${account}.ref/crl/${account}.ref.pem" "${dir}/crl.pem"
+	echo "Remember to submit the CRL file '${dir}/crl.pem' to the admin, otherwise those you invite will not be able to connect"
+}
+
 # Receive the specified client certificate.
 # 1: Path to the certificate to be received.
 afrc_receive_client() {
@@ -131,6 +148,12 @@ elif [ "$1" == "receive-client" ]; then
 		usage_print "Not enough arguments"
 	fi
 	afrc_receive_client $@
+elif [ "$1" == "receive-referrer" ]; then
+	shift
+	if [ $# -lt 1 ]; then
+		usage_print "Not enough arguments"
+	fi
+	afrc_receive_referrer $@
 elif [ "$1" == "request-referrer" ]; then
 	afrc_request_referrer $@
 fi
