@@ -47,6 +47,26 @@ afrc_receive_client() {
 	dest="${account}/certs/${account}.pem"
 	[ -f "${dest}" ] && die "Client certificate already received ('${dest}' is a file)"
 	cp "${cert}" "${dest}"
+	rm -f "${dir}/csr.pem"
+}
+
+# Request a referrer certificate.
+afrc_request_referrer() {
+	# Parse client certificate Common Name.
+	pushd "${dir}"
+	cert="${account}/certs/${account}.pem"
+	[ -f "${cert}" ] || die "No client certificate found ('${cert}' not a file)"
+	name=$(openssl x509 -in "${cert}" -noout -subject | sed 's/subject=CN = //')
+
+	# Generate user's CA.
+	ca_gen "${account}.ref"
+
+	# Generate user's CSR.
+	ca_req_gen "${account}.ref" "${name} Referrer"
+
+	# Provide instructions for user.
+	cp "${account}/csr/${account}.ref.pem" "${dir}/csr.ref.pem"
+	echo "Now send the file '${dir}/csr.ref.pem' to the person who will issue your referrer certificate"
 }
 
 # Print a usage message and exit the program.  Exits failure if an error
@@ -111,4 +131,6 @@ elif [ "$1" == "receive-client" ]; then
 		usage_print "Not enough arguments"
 	fi
 	afrc_receive_client $@
+elif [ "$1" == "request-referrer" ]; then
+	afrc_request_referrer $@
 fi
