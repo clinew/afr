@@ -202,6 +202,7 @@ afr_sign_referrer() {
 # 1 (optional): Error message to print.
 usage_print() {
 	# Print error message.
+	set +x
 	if [ $# -gt 0 ]; then
 		echo "$1"
 		echo ""

@@ -133,6 +133,7 @@ afrc_sign_referred() {
 # 1 (optional): Error message to print.
 usage_print() {
 	# Print error message.
+	set +x
 	if [ $# -gt 0 ]; then
 		echo "$1"
 		echo ""
