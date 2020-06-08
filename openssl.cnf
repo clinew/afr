@@ -77,8 +77,7 @@ subjectAltName = critical,DNS:FIXME_SAN
 subjectKeyIdentifier = hash
 authorityKeyIdentifier = keyid:always,issuer
 basicConstraints = critical,CA:TRUE, pathlen:1
-# TODO: Does this designate the certificate as for signing certificates only?
-#KeyUsage = critical,keyCertSign
+extendedKeyUsage=critical,clientAuth
 
 # Extensions for a "referrer" certificate.  Referrer certificates may used by
 # friends in order to invite others (known as "referred" users) to the service.
@@ -86,6 +85,7 @@ basicConstraints = critical,CA:TRUE, pathlen:1
 subjectKeyIdentifier = hash
 authorityKeyIdentifier = keyid:always,issuer
 basicConstraints = critical,CA:TRUE, pathlen:0
+extendedKeyUsage=critical,clientAuth
 
 # Extensions for a "client" certificate.  Client certificates may only be used
 # by users in order to authenticate to a service.  The client may either be a
