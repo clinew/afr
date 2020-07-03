@@ -22,4 +22,9 @@ install:
 	cp afrc /usr/local/bin/afrc
 	cp afr_lib.sh /usr/local/bin/afr_lib.sh
 	mkdir -p /etc/afr
+ifeq (,$(wildcard /etc/afr/openssl.cnf))
 	cp openssl.cnf /etc/afr/openssl.cnf
+endif
+ifeq (,$(wildcard /etc/afr/afr.conf))
+	cp afr.conf /etc/afr/afr.conf
+endif
