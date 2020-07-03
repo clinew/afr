@@ -169,7 +169,9 @@ afr_sign_friend() {
 	cp "$1" "${dest}"
 
 	# Sign the CSR.
+	pushd "${dir}"
 	ca_req_sign "${dirname_signing}" "${2}" "v3_client"
+	popd
 }
 
 # Sign the specified CSR for the specified friend as a referrer certificate.
@@ -192,7 +194,9 @@ afr_sign_referrer() {
 	cp "$1" "${path}"
 
 	# Sign the CSR.
+	pushd "${dir}"
 	ca_req_sign "${dirname_signing}" "${2}.ref" "v3_referrer"
+	popd
 
 	# Generate CAfile.
 	afr_gen_cafile
