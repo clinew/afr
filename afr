@@ -82,10 +82,11 @@ afr_init() {
 	ca_crl_gen "${dirname_root}"
 
 	# Create service CA.
+	# FIXME: Allow sane user configuration of validity length.
 	ca_gen "${dirname_service}"
 	ca_req_gen "${dirname_service}" "${service}"
 	ca_req_submit "${dirname_root}" "${dirname_service}"
-	ca_req_sign "${dirname_root}" "${dirname_service}" "v3_service" "${subject_alt_name}"
+	ca_req_sign "${dirname_root}" "${dirname_service}" "v3_service" "${subject_alt_name}" "370"
 	ca_req_receive "${dirname_root}" "${dirname_service}"
 
 	# Create signing CA.

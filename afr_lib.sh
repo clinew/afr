@@ -65,6 +65,7 @@ ca_req_receive() {
 # 2: The CA which will be signed.
 # 3: Extensions section to use.
 # 4 (optional): subjectAltName value.
+# 5 (optional): Validity length in days.
 ca_req_sign() {
 	# Create additional extension.
 	pushd "$1"
@@ -72,9 +73,12 @@ ca_req_sign() {
 		# Giant, fragile hack (see file).
 		sed -i "s/FIXME_SAN/$4/" openssl.cnf
 	fi
+	if [ -n "$5" ]; then
+		local days="-days $5"
+	fi
 
 	# Sign the certificate.
-	openssl ca -config openssl.cnf -keyfile "private/${1}.pem" -cert "certs/${1}.pem" -extensions "$3" -in "csr/${2}.pem" -out "certs/${2}.pem" -batch -startdate $(TZ=UTC date +%Y%m%d%H%M%SZ --date "now - 3 seconds")
+	openssl ca -config openssl.cnf -keyfile "private/${1}.pem" -cert "certs/${1}.pem" -extensions "$3" -in "csr/${2}.pem" -out "certs/${2}.pem" -batch ${days} -startdate $(TZ=UTC date +%Y%m%d%H%M%SZ --date "now - 3 seconds")
 	popd
 }
 
