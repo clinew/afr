@@ -121,6 +121,34 @@ afr_receive_crl() {
 	afr_gen_crlfile
 }
 
+# Re-generates the service certificate.
+afr_refresh_service() {
+	# Validate configuration.
+	[ -z "${dir}" ] && die "'dir' not defined"
+	[ -z "${service}" ] && die "'service' not defined"
+	[ -z "${subject_alt_name}" ] && die "'subject_alt_name' not defined"
+	[ ! -f "${dirname_root}/private/${dirname_root}.pem" ] && die "Root CA private key not found"
+
+	# Revoke old service CA.
+	ca_revoke "${dirname_root}" "${dirname_service}"
+
+	# Store old CSRs and service CA.
+	date=$(date +%Y%m%S-%H%M)
+	mv "${dirname_service}/csr/${dirname_service}.pem" "${dirname_service}/csr/.${dirname_service}.${date}.pem"
+	mv "${dirname_root}/csr/${dirname_service}.pem" "${dirname_root}/csr/.${dirname_service}.${date}.pem"
+	mv "${dirname_root}/certs/${dirname_service}.pem" "${dirname_root}/certs/.${dirname_service}.${date}.pem"
+	mv "${dirname_service}/certs/${dirname_service}.pem" "${dirname_service}/certs/.${dirname_service}.${date}.pem"
+
+	# Create service CA.
+	ca_req_gen "${dirname_service}" "${service}"
+	ca_req_submit "${dirname_root}" "${dirname_service}"
+	ca_req_sign "${dirname_root}" "${dirname_service}" "v3_service" "${subject_alt_name}" "370"
+	ca_req_receive "${dirname_root}" "${dirname_service}"
+
+	# Deploy the server's certificates file.
+	afr_gen_certsfile
+}
+
 # Revoke the specified friend's client certificate.
 # 1: Name of the friend to revoke.
 afr_revoke_friend() {
@@ -214,7 +242,7 @@ usage_print() {
 	fi
 
 	# Print usage message.
-	echo "$0 [-c <path>] {init|receive-crl|revoke-friend|revoke-referrer|sign-friend|sign-referrer}"
+	echo "$0 [-c <path>] {init|receive-crl|refresh-service|revoke-friend|revoke-referrer|sign-friend|sign-referrer}"
 	echo ""
 	echo -e "\t-c  Path to alternate configuration file"
 	echo ""
@@ -222,6 +250,7 @@ usage_print() {
 	echo -e "\treceive-crl <CRL> <NAME>: Receive a friend's CRL"
 	echo -e "\t\tCRL: Path to friend's CRL"
 	echo -e "\t\tNAME: Name of friend who issued the CRL"
+	echo -e "\trefresh-service: Issue new service certificate"
 	echo -e "\trevoke-friend <NAME>: Revoke friend's client certificate"
 	echo -e "\t\tNAME: Name of friend to revoke"
 	echo -e "\trevoke-referrer <NAME>: Revoke friend's referrer certificate"
@@ -278,6 +307,8 @@ elif [ "$1" == "receive-crl" ]; then
 		usage_print "Not enough arguments"
 	fi
 	afr_receive_crl $@
+elif [ "$1" == "refresh-service" ]; then
+	afr_refresh_service
 elif [ "$1" == "revoke-friend" ]; then
 	shift
 	if [ $# -lt 1 ]; then
